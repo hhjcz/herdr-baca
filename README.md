@@ -50,6 +50,7 @@ orders by last activity (live sessions first).
 | ctrl-u | toggle view of hidden sessions |
 | ctrl-y | copy session id / resume command / cwd / transcript path |
 | alt-v | paste clipboard into the query (popups don't get herdr's paste) |
+| alt-j | open the session's Jira ticket (needs `jira_url`) |
 | ctrl-r | reindex memex |
 | ctrl-/ | show / hide preview (remembered) |
 
@@ -62,6 +63,14 @@ and from Claude transcripts' `gitBranch` (ticket must own ≥ 20 % of ticket-bra
 \+ manual tags − rejected. Stored in `$HERDR_PLUGIN_STATE_DIR/tags.tsv`
 (`session_id, tag, manual|rejected`); branch scan cached in `auto-tags.tsv.v2`.
 
+## Config
+
+`~/.config/herdr/plugins/config/hhj.baca/config.toml`:
+
+```toml
+jira_url = "https://your-site.atlassian.net"   # ticket tags become links (ctrl+click), alt-j opens
+```
+
 ## Layout
 
 - `bin/picker.sh` popup + fzf
@@ -69,6 +78,7 @@ and from Claude transcripts' `gitBranch` (ticket must own ≥ 20 % of ticket-bra
 - `bin/preview.sh` live pane tail / last memex messages
 - `bin/switch.sh` focus / resume (runs detached from popup)
 - `bin/tag.sh` tag editor
+- `bin/jira.sh` open ticket in browser
 - `bin/track.sh` pane.focused hook → focus log
 - `bin/hide.sh` toggle id in `$HERDR_PLUGIN_STATE_DIR/hidden`
 - `bin/index.sh` memex index (on picker open, async, + action)

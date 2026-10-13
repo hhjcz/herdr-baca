@@ -111,6 +111,7 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
     --argjson autotags "$autotags" --argjson usertags "$usertags" --arg re "$BACA_TICKET_RE" \
     --arg tag "$tag" --argjson bytag "$bytag" \
     --argjson focus "$focus" --argjson recent "$recent" --arg exclude "$exclude" \
+    --arg jira "$(config_str jira_url | sed 's:/*$::')" \
     --arg here "${root:-}" --argjson now "$(date +%s)" '
   def age($t):
     ($now - $t) as $d
@@ -127,6 +128,13 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
   # Basic ANSI only: herdr popups had trouble with 24-bit colors (herdr#4142).
   def short($s): {claude: "\u001b[33mc\u001b[0m", opencode: "\u001b[36mo\u001b[0m"}[$s] // $s;
   # All tags while they fit in 26 cols, else as many as fit plus "+N".
+  # Ticket tags become blue "↗KEY" OSC 8 links when jira_url is set; other tags stay magenta.
+  # BEL terminator: @tsv would double the backslash of ESC \.
+  def marklinks: if $jira == "" then . else map(if test("^" + $re + "$") then "↗" + . else . end) end;
+  def linkify:
+    if $jira == "" then .
+    else gsub("↗(?<k>" + $re + ")";
+      "\u001b[34m\u001b]8;;\($jira)/browse/\(.k)\u0007↗\(.k)\u001b]8;;\u0007\u001b[35m") end;
   def tagtxt:
     . as $all
     | reduce range(0; length) as $i ("";
@@ -188,7 +196,7 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
       | sort_by((if .pane != "" then 0 else 1 end), (if $recent then -.f else 0 end), -.t)
     end
   # Tags get their own column sized to the widest visible value, so it lines up across rows.
-  | ([.[] | select(.source != "group") | .tags | tagtxt | length] | [(max // 0), 30] | min) as $tw
+  | ([.[] | select(.source != "group") | .tags | marklinks | tagtxt | length] | [(max // 0), 30] | min) as $tw
   | (if $tw == 0 then 0 else 2 end) as $tgap
   | .[]
   | if .source == "group" then
@@ -203,7 +211,8 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
         + "  " + short(.source)
         + "  " + (.label | gsub("[\t\n]"; " ") | clip(70 - $tw - $tgap) | . + " " * (70 - $tw - $tgap - length))
         + (if $tw == 0 then "" else
-            " " * $tgap + "\u001b[35m" + (.tags | tagtxt | clip($tw) | . + " " * ($tw - length)) + "\u001b[0m" end)
+            (.tags | marklinks | tagtxt | clip($tw)) as $plain
+            | " " * $tgap + "\u001b[35m" + ($plain | linkify) + "\u001b[0m" + " " * ($tw - ($plain | length)) end)
         + "  \u001b[2m" + ((.cwd // "") | split("/") | last // "") + "\u001b[0m" ),
       (.tags | join(","))
     ]

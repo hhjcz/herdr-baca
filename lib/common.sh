@@ -12,6 +12,13 @@ BACA_AUTOTAGS="$BACA_STATE/auto-tags.tsv"
 # Jira-style keys; shared by grep -E and jq (Oniguruma), so keep it to the common subset.
 BACA_TICKET_RE="${BACA_TICKET_RE:-[A-Z][A-Z0-9]+-[0-9]+}"
 
+# Plugin config: $HERDR_PLUGIN_CONFIG_DIR/config.toml, flat `key = "value"` lines only.
+config_str() {
+  local file="${HERDR_PLUGIN_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/config/hhj.baca}/config.toml"
+  [ -f "$file" ] || return 0
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*[\"']\([^\"']*\)[\"'].*/\1/p" "$file" | tail -n1
+}
+
 notify() {
   "$H" notification show "baca" --body "$1" >/dev/null 2>&1 || true
 }

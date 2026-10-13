@@ -29,6 +29,13 @@ title = "baca: recent sessions"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin hhj.baca --entrypoint picker --env BACA_MODE=recent --focus"]
 
+# Raise the JetBrains IDE window for the focused pane's project; focus stays in herdr.
+[[actions]]
+id = "ide"
+title = "baca: raise IDE window"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["bash", "bin/ide.sh"]
+
 [[actions]]
 id = "index"
 title = "baca: refresh memex index"

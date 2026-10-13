@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Bring the JetBrains IDE window holding DIR's project to the front without taking keyboard
-# focus or the mouse cursor away (Hyprland): ide.sh DIR
+# focus or the mouse cursor away (Hyprland): ide.sh [DIR]
+# Without DIR (the herdr "ide" action) it uses the focused pane's directory.
 # Titles read "<project> – …"; the project is the git root's name unless .idea/.name says otherwise.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
@@ -12,7 +13,7 @@ windows() {
     | select(.title | contains(" – ")) | [(.title | split(" – ")[0]), .address] | @tsv'
 }
 
-dir="${1:-}"
+dir="${1:-$(ctx focused_pane_cwd)}"
 [ -d "$dir" ] || die "directory no longer exists: $dir"
 root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || root="$dir"
 name=$(cat "$root/.idea/.name" 2>/dev/null || basename "$root")

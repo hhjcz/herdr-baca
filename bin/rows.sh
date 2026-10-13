@@ -184,7 +184,8 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
       map(. + {f: (if .pane != "" then $focus[.pane] // 0 else 0 end)})
       | map(select((.pane != "" or ($recent | not)) and .pane != $exclude or .pane == ""))
       | map(select(($recent | not) or .pane != ""))
-      | sort_by((if .pane != "" then 0 else 1 end), -.f, -.t)
+      # Focus order belongs to --recent; the main list follows activity, matching the age column.
+      | sort_by((if .pane != "" then 0 else 1 end), (if $recent then -.f else 0 end), -.t)
     end
   # Tags get their own column sized to the widest visible value, so it lines up across rows.
   | ([.[] | select(.source != "group") | .tags | tagtxt | length] | [(max // 0), 30] | min) as $tw

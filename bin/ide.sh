@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Bring the JetBrains IDE window holding DIR's project to the front without taking keyboard
-# focus or the mouse cursor away (Hyprland): ide.sh [DIR]
-# Without DIR (the herdr "ide" action) it uses the focused pane's directory.
+# Bring the JetBrains IDE window holding DIR's project to the front (Hyprland):
+#   ide.sh [--focus] [DIR]
+# By default keyboard focus and the mouse cursor stay put (picker alt-i); --focus switches to
+# the IDE for good (the herdr "ide" action). Without DIR it uses the focused pane's directory.
 # Titles read "<project> – …"; the project is the git root's name unless .idea/.name says otherwise.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
@@ -13,6 +14,11 @@ windows() {
     | select(.title | contains(" – ")) | [(.title | split(" – ")[0]), .address] | @tsv'
 }
 
+stay=true
+if [ "${1:-}" = "--focus" ]; then
+  stay=false
+  shift
+fi
 dir="${1:-$(ctx focused_pane_cwd)}"
 [ -d "$dir" ] || die "directory no longer exists: $dir"
 root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || root="$dir"
@@ -30,6 +36,7 @@ lua() { hyprctl dispatch "$1" 2>&1 | grep -qx ok; }
 focus() { lua "hl.dsp.focus({ window = \"address:$1\" })" || hyprctl dispatch focuswindow "address:$1" >/dev/null 2>&1; }
 
 focus "$addr"
+$stay || exit 0
 [ -n "$active" ] && focus "$active"
 if [ -n "${cx:-}" ] && [ -n "${cy:-}" ]; then
   lua "hl.dsp.cursor.move({ x = $cx, y = $cy })" || hyprctl dispatch movecursor "$cx" "$cy" >/dev/null 2>&1

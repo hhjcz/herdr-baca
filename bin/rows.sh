@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Emits picker rows as TSV: source, session_id, live_pane, cwd, source_path, label, display.
+#
+#   rows.sh [--here DIR] [--all] [--hidden]
+#
+# --here keeps sessions whose cwd is DIR, lives under it, or shares its git root.
+# --all also shows forks and subagent transcripts.
+# --hidden shows only the sessions hidden with hide.sh (live ones are never hidden).
+set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+
+here=""
+all=false
+hidden=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --here) here="$2"; shift 2 ;;
+  --all) all=true; shift ;;
+  --hidden) hidden=true; shift ;;
+  *) die "rows: unknown argument '$1'" ;;
+  esac
+done
+
+MEMEX=$(resolve_memex) || die "memex binary not found (reinstall nicosuave/memex or set BACA_MEMEX)"
+
+scope=()
+if [ -n "$here" ]; then
+  root=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null) || root="$here"
+  scope=(--cwd "$root")
+fi
+
+# Live agents come from herdr, not memex: a session started after the last index run is live
+# but not yet indexed, so this is a union, not a join.
+live=$("$H" agent list 2>/dev/null | jq -c --argjson src "$BACA_SOURCES" \
+  '[.result.agents[]? | select(.agent_session.value and (.agent as $a | $src | index($a)))]') || live='[]'
+[ -n "$live" ] || live='[]'
+
+# Headless `claude -p` runs (entrypoint sdk-*) clutter the list with one-word sessions. A
+# transcript's entrypoint never changes, so each file is classified once and cached.
+headless='[]'
+if ! $all; then
+  mkdir -p "$BACA_STATE"
+  cache="$BACA_STATE/claude-entrypoints.tsv"
+  touch "$cache"
+  for f in "$HOME"/.claude/projects/*/*.jsonl; do
+    [ -f "$f" ] || continue
+    grep -qxF -- "$f"$'\t'"0" "$cache" && continue
+    grep -qxF -- "$f"$'\t'"1" "$cache" && continue
+    if head -n 8 "$f" | grep -q '"entrypoint":"sdk-'; then k=1; else k=0; fi
+    printf '%s\t%s\n' "$f" "$k" >>"$cache"
+  done
+  headless=$(awk -F'\t' '$2 == 1 {print $1}' "$cache" | jq -R . | jq -s -c .)
+fi
+
+hidden_ids=$( { [ -f "$BACA_HIDDEN" ] && cat "$BACA_HIDDEN"; } | jq -R . | jq -s -c 'map(select(. != ""))')
+
+memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
+  jq -r -s --argjson live "$live" --argjson src "$BACA_SOURCES" --argjson all "$all" \
+    --argjson headless "$headless" --argjson hidden_ids "$hidden_ids" --argjson hidden "$hidden" \
+    --arg here "${root:-}" --argjson now "$(date +%s)" '
+  def age($t):
+    ($now - $t) as $d
+    | if $d < 3600 then "\($d / 60 | floor)m"
+      elif $d < 86400 then "\($d / 3600 | floor)h"
+      elif $d < 86400 * 60 then "\($d / 86400 | floor)d"
+      else "\($d / 86400 / 30 | floor)mo" end;
+  def agecolor($t; $txt):
+    ($now - $t) as $d
+    | (if $d < 3600 then "32" elif $d < 86400 then "39" elif $d < 86400 * 7 then "2" else "90" end) as $c
+    | "\u001b[\($c)m\($txt)\u001b[0m";
+  def icon($s):
+    {working: "●", blocked: "!", done: "✓", idle: "○"}[$s] // "?";
+  # Basic ANSI only: herdr popups had trouble with 24-bit colors (herdr#4142).
+  def short($s): {claude: "\u001b[33mc\u001b[0m", opencode: "\u001b[36mo\u001b[0m"}[$s] // $s;
+  def clip($n): if length > $n then .[:$n - 1] + "…" else . end;
+  def ts: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+
+  ($live | map({key: .agent_session.value, value: .}) | from_entries) as $byid
+  | ($headless | INDEX(.)) as $skip
+  | [ .[]
+      | select(.source as $s | $src | index($s))
+      | select($all or (.conversation_kind == "main" and (.source_path | test("/subagents/") | not)
+                        and ($skip[.source_path] | not)))
+    ] as $hist
+  | ($hist | map(.session_id) | INDEX(.)) as $known
+  | (
+      [ $live[]
+        | select($known[.agent_session.value] | not)
+        | select($here == "" or (.cwd // "") == $here or ((.cwd // "") | startswith($here + "/")))
+        | {source: .agent, session_id: .agent_session.value, cwd: .cwd, source_path: "",
+           label: (.terminal_title_stripped // ""), t: $now}
+      ]
+      + [ $hist[] | {source, session_id, cwd, source_path, label: (.label // ""), t: (.last_at | ts)} ]
+    )
+  # Claude copies a transcript into a second project dir when a session is resumed elsewhere.
+  | group_by(.session_id) | map(max_by(.t))
+  | map(. + {pane: ($byid[.session_id].pane_id // ""), status: ($byid[.session_id].agent_status // "")})
+  | ($hidden_ids | INDEX(.)) as $h
+  | map(select(if $hidden then .pane == "" and $h[.session_id] else .pane != "" or ($h[.session_id] | not) end))
+  | sort_by((if .pane != "" then 0 else 1 end), -.t)
+  | .[]
+  | [ .source, .session_id, .pane, (.cwd // ""), .source_path, .label,
+      ( (if .pane != "" then icon(.status) else " " end)
+        + " " + agecolor(.t; age(.t) | (" " * (4 - length)) + .)
+        + "  " + short(.source)
+        + "  " + (.label | gsub("[\t\n]"; " ") | clip(70) | . + " " * (70 - length))
+        + "  \u001b[2m" + ((.cwd // "") | split("/") | last // "") + "\u001b[0m" )
+    ]
+  | @tsv'

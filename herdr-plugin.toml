@@ -1,0 +1,28 @@
+# baca: session picker for herdr. Lists Claude Code and OpenCode sessions (history from memex,
+# liveness from herdr), focuses a live one or resumes a past one where you choose.
+id = "hhj.baca"
+name = "baca"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+platforms = ["linux", "macos"]
+description = "Session picker: switch to live agent sessions or resume past Claude Code / OpenCode ones (via memex)."
+
+# The command resolves against the pane's cwd, not the plugin root, hence the absolute path.
+[[panes]]
+id = "picker"
+title = "baca"
+placement = "popup"
+width = "90%"
+height = "85%"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/picker.sh\""]
+
+[[actions]]
+id = "open"
+title = "baca: sessions"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin hhj.baca --entrypoint picker --focus"]
+
+[[actions]]
+id = "index"
+title = "baca: refresh memex index"
+command = ["bash", "bin/index.sh"]

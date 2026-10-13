@@ -115,6 +115,16 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
     {working: "●", blocked: "!", done: "✓", idle: "○"}[$s] // "?";
   # Basic ANSI only: herdr popups had trouble with 24-bit colors (herdr#4142).
   def short($s): {claude: "\u001b[33mc\u001b[0m", opencode: "\u001b[36mo\u001b[0m"}[$s] // $s;
+  # All tags while they fit in 26 cols, else as many as fit plus "+N".
+  def tagtxt:
+    . as $all
+    | reduce range(0; length) as $i ("";
+        if . != "" and (. | test(" \\+[0-9]+$")) then .
+        elif ((if . == "" then "" else . + " " end) + $all[$i] | length) <= 26
+             and ($i == ($all | length) - 1
+                  or ((if . == "" then "" else . + " " end) + $all[$i] | length) + 4 <= 26)
+        then (if . == "" then "" else . + " " end) + $all[$i]
+        else (if . == "" then $all[$i] else . end) + " +\(($all | length) - $i - (if . == "" then 1 else 0 end))" end);
   def clip($n): if length > $n then .[:$n - 1] + "…" else . end;
   def ts: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
 
@@ -160,6 +170,9 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
               + (sort_by(-.t) | map(.tags -= [$g])))
       | add // []
     else sort_by((if .pane != "" then 0 else 1 end), -.t) end
+  # Tags get their own column sized to the widest visible value, so it lines up across rows.
+  | ([.[] | select(.source != "group") | .tags | tagtxt | length] | [(max // 0), 30] | min) as $tw
+  | (if $tw == 0 then 0 else 2 end) as $tgap
   | .[]
   | if .source == "group" then
       ((if .session_id == "" then "no tag" else .session_id end)
@@ -171,11 +184,9 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
       ( (if .pane != "" then icon(.status) else " " end)
         + " " + agecolor(.t; age(.t) | (" " * (4 - length)) + .)
         + "  " + short(.source)
-        + "  " + (
-            (.tags | map("[" + . + "]") | join(" ")) as $tg
-            | (.label | gsub("[\t\n]"; " ") | clip(70 - ($tg | length) - (if $tg == "" then 0 else 1 end))) as $l
-            | $l + (if $tg == "" then "" else " \u001b[35m" + $tg + "\u001b[0m" end)
-              + " " * (70 - ($l | length) - ($tg | length) - (if $tg == "" then 0 else 1 end)))
+        + "  " + (.label | gsub("[\t\n]"; " ") | clip(70 - $tw - $tgap) | . + " " * (70 - $tw - $tgap - length))
+        + (if $tw == 0 then "" else
+            " " * $tgap + "\u001b[35m" + (.tags | tagtxt | clip($tw) | . + " " * ($tw - length)) + "\u001b[0m" end)
         + "  \u001b[2m" + ((.cwd // "") | split("/") | last // "") + "\u001b[0m" ),
       (.tags | join(","))
     ]

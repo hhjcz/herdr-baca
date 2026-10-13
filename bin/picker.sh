@@ -76,7 +76,7 @@ launch() {
 }
 
 header="enter: open · ^t tab here · ^v split · ^w new workspace · ^h this project · ^a forks/subagents
-^e tags · ^g filter tag · ^o group by tag · ^x hide/unhide · ^u show hidden · ^y copy · alt-v paste · ^r reindex"
+^e tags · ^g filter tag · ^o group by tag · ^x hide/unhide · ^u show hidden · ^y copy · alt-v paste · ^r reindex · ^/ preview"
 # Group header rows (source "group") can't be made unselectable in fzf; accepting one filters
 # to its tag and reopens the list, hence the loop. Only the first round reindexes.
 reindex="$BIN/index.sh --quiet; "
@@ -89,6 +89,12 @@ quit="+transform([ -f $T/quit ] && echo abort || :)"
 # popup was opened from, so the first row is where you were before. No reindex: only live
 # sessions show, and they come from herdr, not memex.
 [ "${BACA_MODE:-}" = "recent" ] && printf '%s' "$fpane" >"$T/recent"
+
+# The preview toggle persists across popups: hiding it is usually a lasting preference.
+preview_hidden() {
+  [ -f "$BACA_STATE/preview-hidden" ] && printf ',hidden'
+}
+mkdir -p "$BACA_STATE"
 
 first=true
 while :; do
@@ -106,7 +112,8 @@ sel=$(eval "$initial" | fzf \
   --ansi --delimiter=$'\t' --with-nth=7 --no-sort --layout=reverse --info=inline \
   --prompt="$(prompt_for "$T")" --header="$header" \
   --expect=ctrl-t,ctrl-v,ctrl-w \
-  --preview="$BIN/preview.sh {1} {2} {3} {4} {6}" --preview-window='right,35%,wrap' \
+  --preview="$BIN/preview.sh {1} {2} {3} {4} {6}" --preview-window="right,35%,wrap$(preview_hidden)" \
+  --bind="ctrl-/:toggle-preview+execute-silent([ -f $BACA_STATE/preview-hidden ] && rm $BACA_STATE/preview-hidden || touch $BACA_STATE/preview-hidden)" \
   --bind="ctrl-h:execute-silent([ -f $T/here ] && rm $T/here || printf %s '$fcwd' > $T/here)+reload($rows)" \
   --bind="ctrl-a:execute-silent([ -f $T/all ] && rm $T/all || touch $T/all)+reload($rows)" \
   --bind="ctrl-x:execute-silent([ {1} != group ] && [ -z {3} ] && $BIN/hide.sh {2})+reload($rows)" \

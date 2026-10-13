@@ -51,6 +51,7 @@ orders by last activity (live sessions first).
 | ctrl-y | copy session id / resume command / cwd / transcript path |
 | alt-v | paste clipboard into the query (popups don't get herdr's paste) |
 | ctrl-r | reindex memex |
+| ctrl-/ | show / hide preview (remembered) |
 
 Status column: `●` working · `○` idle · `✓` done · `!` blocked · blank = not running.
 

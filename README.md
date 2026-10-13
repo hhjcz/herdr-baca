@@ -32,6 +32,9 @@ description = "baca sessions"
 | ctrl-t / ctrl-v / ctrl-w | resume in new tab here / split / new workspace |
 | ctrl-h | only current project (git root of focused pane) |
 | ctrl-a | also forks, subagents, headless `claude -p` runs |
+| ctrl-e | edit tags (enter toggles / adds typed tag, esc done) |
+| ctrl-g | filter by tag (again: clear) |
+| ctrl-o | group by tag (groups ordered by latest activity; multi-tag sessions sit in their first tag) |
 | ctrl-x | hide / unhide session (baca-only list; transcripts untouched; live sessions can't be hidden) |
 | ctrl-u | toggle view of hidden sessions |
 | ctrl-y | copy session id / resume command / cwd / transcript path |
@@ -40,11 +43,19 @@ description = "baca sessions"
 
 Status column: `●` working · `○` idle · `✓` done · `!` blocked · blank = not running.
 
+## Tags (experimental)
+
+Effective tags = ticket ids (`BACA_TICKET_RE`, default `[A-Z][A-Z0-9]+-[0-9]+`) from the label
+and from Claude transcripts' `gitBranch` (ticket must own ≥ 20 % of ticket-branch messages)
+\+ manual tags − rejected. Stored in `$HERDR_PLUGIN_STATE_DIR/tags.tsv`
+(`session_id, tag, manual|rejected`); branch scan cached in `auto-tags.tsv.v2`.
+
 ## Layout
 
 - `bin/picker.sh` popup + fzf
 - `bin/rows.sh` memex + herdr → TSV rows
 - `bin/preview.sh` live pane tail / last memex messages
 - `bin/switch.sh` focus / resume (runs detached from popup)
+- `bin/tag.sh` tag editor
 - `bin/hide.sh` toggle id in `$HERDR_PLUGIN_STATE_DIR/hidden`
 - `bin/index.sh` memex index (on picker open, async, + action)

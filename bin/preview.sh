@@ -4,6 +4,10 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 source="$1" id="$2" pane="$3" cwd="$4" label="$5"
+if [ "$source" = "group" ]; then
+  [ -n "$id" ] && printf 'enter: show only %s\n' "$id"
+  exit 0
+fi
 width="${FZF_PREVIEW_COLUMNS:-80}"
 
 bold=$'\e[1m' dim=$'\e[2m' cyan=$'\e[36m' green=$'\e[32m' yellow=$'\e[33m' reset=$'\e[0m'

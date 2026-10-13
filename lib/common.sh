@@ -5,6 +5,10 @@ BACA_ROOT="${HERDR_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 BACA_STATE="${HERDR_PLUGIN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/baca}"
 BACA_SOURCES='["claude","opencode"]'
 BACA_HIDDEN="$BACA_STATE/hidden"
+BACA_TAGS="$BACA_STATE/tags.tsv"
+BACA_AUTOTAGS="$BACA_STATE/auto-tags.tsv"
+# Jira-style keys; shared by grep -E and jq (Oniguruma), so keep it to the common subset.
+BACA_TICKET_RE="${BACA_TICKET_RE:-[A-Z][A-Z0-9]+-[0-9]+}"
 
 notify() {
   "$H" notification show "baca" --body "$1" >/dev/null 2>&1 || true

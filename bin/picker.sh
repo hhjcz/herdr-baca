@@ -78,6 +78,11 @@ header="enter: open · ^t tab here · ^v split · ^w new workspace · ^h this pr
 # Group header rows (source "group") can't be made unselectable in fzf; accepting one filters
 # to its tag and reopens the list, hence the loop. Only the first round reindexes.
 reindex="$BIN/index.sh --quiet; "
+# alt-a opens the popup, so it closes it too. Sub-pickers (tags, copy, filter) run inside
+# execute() and inherit this via FZF_DEFAULT_OPTS; the quit file tells the main list to follow.
+export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:-} --bind='alt-a:execute-silent(touch $T/quit)+abort'"
+quit="+transform([ -f $T/quit ] && echo abort || :)"
+
 first=true
 while :; do
 if $first && [ -s "$BACA_STATE/rows.cache" ]; then
@@ -89,15 +94,15 @@ sel=$(eval "$initial" | fzf \
   --ansi --delimiter=$'\t' --with-nth=7 --no-sort --layout=reverse --info=inline \
   --prompt="$(prompt_for "$T")" --header="$header" \
   --expect=ctrl-t,ctrl-v,ctrl-w \
-  --preview="$BIN/preview.sh {1} {2} {3} {4} {6}" --preview-window='right,50%,wrap' \
+  --preview="$BIN/preview.sh {1} {2} {3} {4} {6}" --preview-window='right,35%,wrap' \
   --bind="ctrl-h:execute-silent([ -f $T/here ] && rm $T/here || printf %s '$fcwd' > $T/here)+reload($rows)" \
   --bind="ctrl-a:execute-silent([ -f $T/all ] && rm $T/all || touch $T/all)+reload($rows)" \
   --bind="ctrl-x:execute-silent([ {1} != group ] && [ -z {3} ] && $BIN/hide.sh {2})+reload($rows)" \
   --bind="ctrl-u:execute-silent([ -f $T/hidden ] && rm $T/hidden || touch $T/hidden)+reload($rows)+transform-prompt($BIN/picker.sh --prompt $T)" \
-  --bind="ctrl-e:execute([ {1} = group ] || $BIN/tag.sh {2} {6} {8})+reload($rows)" \
-  --bind="ctrl-g:execute($BIN/picker.sh --pick-tag $T)+reload($rows)+transform-prompt($BIN/picker.sh --prompt $T)" \
+  --bind="ctrl-e:execute([ {1} = group ] || $BIN/tag.sh {2} {6} {8})+reload($rows)$quit" \
+  --bind="ctrl-g:execute($BIN/picker.sh --pick-tag $T)+reload($rows)+transform-prompt($BIN/picker.sh --prompt $T)$quit" \
   --bind="ctrl-o:execute-silent([ -f $T/bytag ] && rm $T/bytag || touch $T/bytag)+reload($rows)" \
-  --bind="ctrl-y:execute([ {1} = group ] || $BIN/copy.sh {1} {2} {4} {5})" \
+  --bind="ctrl-y:execute([ {1} = group ] || $BIN/copy.sh {1} {2} {4} {5})$quit" \
   --bind="alt-v:transform-query($BIN/paste.sh {q})" \
   --bind="load:unbind(load)+reload-sync($reindex$rows)" \
   --bind="ctrl-r:execute($MEMEX index --only-source claude --only-source opencode --non-interactive --no-update-check)+reload($rows)")

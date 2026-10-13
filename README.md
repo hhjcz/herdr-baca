@@ -51,6 +51,7 @@ orders by last activity (live sessions first).
 | ctrl-y | copy session id / resume command / cwd / transcript path |
 | alt-v | paste clipboard into the query (popups don't get herdr's paste) |
 | alt-j | open the session's Jira ticket (needs `jira_url`) |
+| alt-i | bring the JetBrains IDE window with the session's project to the front (focus and cursor stay) |
 | ctrl-r | reindex memex |
 | ctrl-/ | show / hide preview (remembered) |
 
@@ -79,6 +80,7 @@ jira_url = "https://your-site.atlassian.net"   # ticket tags become links (ctrl+
 - `bin/switch.sh` focus / resume (runs detached from popup)
 - `bin/tag.sh` tag editor
 - `bin/jira.sh` open ticket in browser
+- `bin/ide.sh` raise the session's JetBrains IDE window (Hyprland)
 - `bin/track.sh` pane.focused hook → focus log
 - `bin/hide.sh` toggle id in `$HERDR_PLUGIN_STATE_DIR/hidden`
 - `bin/index.sh` memex index (on picker open, async, + action)

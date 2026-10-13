@@ -76,7 +76,7 @@ launch() {
 }
 
 header="enter: open · ^t tab here · ^v split · ^w new workspace · ^h this project · ^a forks/subagents
-^e tags · ^g filter tag · ^o group by tag · ^x hide/unhide · ^u show hidden · ^y copy · alt-v paste · alt-j jira · ^r reindex · ^/ preview"
+^e tags · ^g filter tag · ^o group by tag · ^x hide/unhide · ^u show hidden · ^y copy · alt-v paste · alt-j jira · alt-i IDE · ^r reindex · ^/ preview"
 # Group header rows (source "group") can't be made unselectable in fzf; accepting one filters
 # to its tag and reopens the list, hence the loop. Only the first round reindexes.
 reindex="$BIN/index.sh --quiet; "
@@ -121,6 +121,7 @@ sel=$(eval "$initial" | fzf \
   --bind="ctrl-e:execute([ {1} = group ] || $BIN/tag.sh {2} {6} {8})+reload($rows)$quit" \
   --bind="ctrl-g:execute($BIN/picker.sh --pick-tag $T)+reload($rows)+transform-prompt($BIN/picker.sh --prompt $T)$quit" \
   --bind="ctrl-o:execute-silent([ -f $T/bytag ] && rm $T/bytag || touch $T/bytag)+reload($rows)" \
+  --bind="alt-i:execute-silent([ {1} = group ] || $BIN/ide.sh {4})" \
   --bind="alt-j:execute([ {1} = group ] || $BIN/jira.sh {8})$quit" \
   --bind="ctrl-y:execute([ {1} = group ] || $BIN/copy.sh {1} {2} {4} {5})$quit" \
   --bind="alt-v:transform-query($BIN/paste.sh {q})" \

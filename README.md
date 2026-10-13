@@ -22,7 +22,18 @@ key = "prefix+a"
 type = "plugin_action"
 command = "hhj.baca.open"
 description = "baca sessions"
+
+[[keys.command]]
+key = "alt+e"
+type = "plugin_action"
+command = "hhj.baca.recent"
+description = "baca recent sessions"
 ```
+
+`hhj.baca.recent` opens the same picker with only live sessions, most recently focused
+first and the current pane left out, so Enter jumps back to where you were (alt-tab style).
+A `pane.focused` hook (`bin/track.sh`) keeps the focus log in `focus.tsv`; the main list
+also orders live sessions by it.
 
 ## Keys
 
@@ -57,5 +68,6 @@ and from Claude transcripts' `gitBranch` (ticket must own ≥ 20 % of ticket-bra
 - `bin/preview.sh` live pane tail / last memex messages
 - `bin/switch.sh` focus / resume (runs detached from popup)
 - `bin/tag.sh` tag editor
+- `bin/track.sh` pane.focused hook → focus log
 - `bin/hide.sh` toggle id in `$HERDR_PLUGIN_STATE_DIR/hidden`
 - `bin/index.sh` memex index (on picker open, async, + action)

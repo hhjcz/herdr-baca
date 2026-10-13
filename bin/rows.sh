@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Emits picker rows as TSV: source, session_id, live_pane, cwd, source_path, label, display, tags.
 #
-#   rows.sh [--here DIR] [--all] [--hidden] [--tag TAG] [--by-tag]
+#   rows.sh [--here DIR] [--all] [--hidden] [--tag TAG] [--by-tag] [--recent] [--exclude-pane P]
 #
 # --here keeps sessions whose cwd is DIR, lives under it, or shares its git root.
 # --all also shows forks and subagent transcripts.
 # --hidden shows only the sessions hidden with hide.sh (live ones are never hidden).
 # --tag keeps sessions carrying TAG; --by-tag sorts by first tag so groups sit together.
+# --recent keeps only live sessions, most recently focused first (focus log from track.sh);
+# --exclude-pane drops the pane the picker was opened from.
 #
 # Tags = ticket ids found in the label or the transcript's git branches, plus manual tags from
 # tag.sh, minus tags the user rejected there.
@@ -18,6 +20,8 @@ all=false
 hidden=false
 tag=""
 bytag=false
+recent=false
+exclude=""
 while [ $# -gt 0 ]; do
   case "$1" in
   --here) here="$2"; shift 2 ;;
@@ -25,6 +29,8 @@ while [ $# -gt 0 ]; do
   --hidden) hidden=true; shift ;;
   --tag) tag="$2"; shift 2 ;;
   --by-tag) bytag=true; shift ;;
+  --recent) recent=true; shift ;;
+  --exclude-pane) exclude="$2"; shift 2 ;;
   *) die "rows: unknown argument '$1'" ;;
   esac
 done
@@ -93,6 +99,10 @@ autotags=$(jq -R -s -c 'split("\n") | map(select(. != "") | split("\t")
 usertags=$( { [ -f "$BACA_TAGS" ] && cat "$BACA_TAGS"; } | jq -R -s -c 'split("\n")
   | map(select(. != "") | split("\t") | {id: .[0], tag: .[1], kind: .[2]})')
 
+focus=$( { [ -f "$BACA_FOCUS" ] && cat "$BACA_FOCUS"; } |
+  awk -F'\t' '{ t[$1] = $2 } END { for (p in t) printf "%s\t%s\n", p, t[p] }' |
+  jq -R -s -c 'split("\n") | map(select(. != "") | split("\t") | {key: .[0], value: (.[1] | tonumber)}) | from_entries')
+
 hidden_ids=$( { [ -f "$BACA_HIDDEN" ] && cat "$BACA_HIDDEN"; } | jq -R . | jq -s -c 'map(select(. != ""))')
 
 memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
@@ -100,6 +110,7 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
     --argjson headless "$headless" --argjson hidden_ids "$hidden_ids" --argjson hidden "$hidden" \
     --argjson autotags "$autotags" --argjson usertags "$usertags" --arg re "$BACA_TICKET_RE" \
     --arg tag "$tag" --argjson bytag "$bytag" \
+    --argjson focus "$focus" --argjson recent "$recent" --arg exclude "$exclude" \
     --arg here "${root:-}" --argjson now "$(date +%s)" '
   def age($t):
     ($now - $t) as $d
@@ -169,7 +180,12 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
             | [{source: "group", session_id: $g, n: length, t: (map(.t) | max)}]
               + (sort_by(-.t) | map(.tags -= [$g])))
       | add // []
-    else sort_by((if .pane != "" then 0 else 1 end), -.t) end
+    else
+      map(. + {f: (if .pane != "" then $focus[.pane] // 0 else 0 end)})
+      | map(select((.pane != "" or ($recent | not)) and .pane != $exclude or .pane == ""))
+      | map(select(($recent | not) or .pane != ""))
+      | sort_by((if .pane != "" then 0 else 1 end), -.f, -.t)
+    end
   # Tags get their own column sized to the widest visible value, so it lines up across rows.
   | ([.[] | select(.source != "group") | .tags | tagtxt | length] | [(max // 0), 30] | min) as $tw
   | (if $tw == 0 then 0 else 2 end) as $tgap

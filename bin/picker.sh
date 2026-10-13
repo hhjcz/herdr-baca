@@ -14,6 +14,7 @@ if [ "${1:-}" = "--rows" ]; then
   [ -f "$t/hidden" ] && args+=(--hidden)
   [ -f "$t/tag" ] && args+=(--tag "$(cat "$t/tag")")
   [ -f "$t/bytag" ] && args+=(--by-tag)
+  [ -f "$t/recent" ] && args+=(--recent --exclude-pane "$(cat "$t/recent")")
   if [ ${#args[@]} -eq 0 ]; then
     mkdir -p "$BACA_STATE"
     # The unfiltered list is what the next popup shows instantly, before memex reindexes.
@@ -39,7 +40,8 @@ if [ "${1:-}" = "--pick-tag" ]; then
 fi
 
 prompt_for() {
-  if [ -f "$1/tag" ]; then printf '%s> ' "$(cat "$1/tag")"
+  if [ -f "$1/recent" ]; then printf 'recent> '
+  elif [ -f "$1/tag" ]; then printf '%s> ' "$(cat "$1/tag")"
   elif [ -f "$1/hidden" ]; then printf 'hidden> '
   else printf 'baca> '; fi
 }
@@ -83,12 +85,22 @@ reindex="$BIN/index.sh --quiet; "
 export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:-} --bind='alt-a:execute-silent(touch $T/quit)+abort'"
 quit="+transform([ -f $T/quit ] && echo abort || :)"
 
+# BACA_MODE=recent (the "recent" action): live sessions by last focus, minus the pane the
+# popup was opened from, so the first row is where you were before. No reindex: only live
+# sessions show, and they come from herdr, not memex.
+[ "${BACA_MODE:-}" = "recent" ] && printf '%s' "$fpane" >"$T/recent"
+
 first=true
 while :; do
-if $first && [ -s "$BACA_STATE/rows.cache" ]; then
+if $first && [ ! -f "$T/recent" ] && [ -s "$BACA_STATE/rows.cache" ]; then
   initial="cat $BACA_STATE/rows.cache"
 else
   initial="$rows"
+fi
+if [ -f "$T/recent" ]; then
+  refresh="load:unbind(load)"
+else
+  refresh="load:unbind(load)+reload-sync($reindex$rows)"
 fi
 sel=$(eval "$initial" | fzf \
   --ansi --delimiter=$'\t' --with-nth=7 --no-sort --layout=reverse --info=inline \
@@ -104,7 +116,7 @@ sel=$(eval "$initial" | fzf \
   --bind="ctrl-o:execute-silent([ -f $T/bytag ] && rm $T/bytag || touch $T/bytag)+reload($rows)" \
   --bind="ctrl-y:execute([ {1} = group ] || $BIN/copy.sh {1} {2} {4} {5})$quit" \
   --bind="alt-v:transform-query($BIN/paste.sh {q})" \
-  --bind="load:unbind(load)+reload-sync($reindex$rows)" \
+  --bind="$refresh" \
   --bind="ctrl-r:execute($MEMEX index --only-source claude --only-source opencode --non-interactive --no-update-check)+reload($rows)")
 [ -n "$sel" ] || exit 0
 reindex=""

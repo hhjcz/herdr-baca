@@ -2,10 +2,12 @@
 
 H="${HERDR_BIN_PATH:-herdr}"
 BACA_ROOT="${HERDR_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-BACA_STATE="${HERDR_PLUGIN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/baca}"
+# Outside herdr (manual runs, tests) fall back to the dir herdr itself assigns the plugin.
+BACA_STATE="${HERDR_PLUGIN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/herdr/plugins/hhj.baca}"
 BACA_SOURCES='["claude","opencode"]'
 BACA_HIDDEN="$BACA_STATE/hidden"
 BACA_TAGS="$BACA_STATE/tags.tsv"
+BACA_FOCUS="$BACA_STATE/focus.tsv"
 BACA_AUTOTAGS="$BACA_STATE/auto-tags.tsv"
 # Jira-style keys; shared by grep -E and jq (Oniguruma), so keep it to the common subset.
 BACA_TICKET_RE="${BACA_TICKET_RE:-[A-Z][A-Z0-9]+-[0-9]+}"

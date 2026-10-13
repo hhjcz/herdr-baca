@@ -22,7 +22,19 @@ title = "baca: sessions"
 contexts = ["global", "workspace", "tab", "pane"]
 command = ["sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin hhj.baca --entrypoint picker --focus"]
 
+# Live sessions by last focus, previous one preselected: an alt-tab over agent sessions.
+[[actions]]
+id = "recent"
+title = "baca: recent sessions"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin hhj.baca --entrypoint picker --env BACA_MODE=recent --focus"]
+
 [[actions]]
 id = "index"
 title = "baca: refresh memex index"
 command = ["bash", "bin/index.sh"]
+
+# Feeds the focus log behind "recent" ordering.
+[[events]]
+on = "pane.focused"
+command = ["bash", "bin/track.sh"]

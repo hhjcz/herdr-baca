@@ -159,12 +159,17 @@ esac
 
 # Enter: let the user choose where the resumed session goes.
 options=""
+# Nearest first: this pane, beside it, this workspace, the project's workspace, a new one.
+# Only an agent-free pane: resuming there would type into the running agent.
+if [ -n "$fpane" ] && [ -z "$("$H" pane get "$fpane" 2>/dev/null | jq -r '.result.pane.agent // empty')" ]; then
+  options+="pane"$'\t'"$fpane"$'\t'"current pane"$'\n'
+fi
+[ -n "$fpane" ] && options+="split"$'\t'"$fpane"$'\t'"split next to current pane"$'\n'
+[ -n "$ws" ] && options+="tab"$'\t'"$ws"$'\t'"new tab in current workspace $(workspace_label "$ws")"$'\n'
 match=$(workspace_for "$rcwd")
 if [ -n "$match" ] && [ "$match" != "$ws" ]; then
   options+="tab"$'\t'"$match"$'\t'"new tab in workspace $(workspace_label "$match") (matches $rcwd)"$'\n'
 fi
-[ -n "$ws" ] && options+="tab"$'\t'"$ws"$'\t'"new tab in current workspace $(workspace_label "$ws")"$'\n'
-[ -n "$fpane" ] && options+="split"$'\t'"$fpane"$'\t'"split next to current pane"$'\n'
 options+="workspace"$'\t'""$'\t'"new workspace"
 
 choice=$(printf '%s\n' "$options" | fzf \

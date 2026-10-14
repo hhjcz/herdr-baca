@@ -4,7 +4,7 @@
 #   switch.sh focus PANE
 #   switch.sh resume SOURCE SESSION_ID CWD LABEL MODE [TARGET]
 #
-# MODE: tab (TARGET = workspace id), split (TARGET = pane id), workspace.
+# MODE: tab (TARGET = workspace id), split / pane (TARGET = pane id), workspace.
 # CWD must already be the resume directory (see resume_cwd).
 #
 # Runs detached from the popup, so failures surface as herdr notifications.
@@ -39,6 +39,10 @@ split)
     die "pane split failed for $target"
   pane=$(jq -r '.result.pane.pane_id' <<<"$out")
   ;;
+pane)
+  pane="$target"
+  "$H" pane run "$pane" "cd -- $(printf '%q' "$cwd")" >/dev/null 2>&1 || die "cannot cd in $pane"
+  ;;
 workspace)
   out=$("$H" workspace create --cwd "$cwd" --label "$tab_label" --no-focus) ||
     die "workspace create failed"
@@ -53,6 +57,9 @@ name="baca-$(printf '%s' "${id#ses_}" | tr -cd 'a-zA-Z0-9' | tr 'A-Z' 'a-z' | cu
 "$H" agent get "$name" >/dev/null 2>&1 && name="$name-$RANDOM"
 
 if ! "$H" agent start "$name" --kind "$source" --pane "$pane" -- "${args[@]}" >/dev/null 2>&1; then
+  # The pane-run fallback types blindly; in a pane the user was working in that could land in
+  # whatever program took over the prompt.
+  [ "$mode" = "pane" ] && die "could not start $source in $pane"
   # agent start refuses a pane whose shell is not at its prompt yet; typing the command still works.
   "$H" pane run "$pane" "$source ${args[*]}" >/dev/null 2>&1 || die "could not start $source in $pane"
 fi

@@ -209,7 +209,11 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
       ( (if .pane != "" then icon(.status) else " " end)
         + " " + agecolor(.t; age(.t) | (" " * (4 - length)) + .)
         + "  " + short(.source)
-        + "  " + (.label | gsub("[\t\n]"; " ") | clip(70 - $tw - $tgap) | . + " " * (70 - $tw - $tgap - length))
+        + "  " + ((70 - $tw - $tgap) as $lw
+            | if $first != "" and .pane == $first then
+                (.label | gsub("[\t\n]"; " ") | clip($lw - 11)) as $l
+                | "\u001b[1m" + $l + "\u001b[0m  \u001b[1;36m◂ current\u001b[0m" + " " * ($lw - ($l | length) - 11)
+              else .label | gsub("[\t\n]"; " ") | clip($lw) | . + " " * ($lw - length) end)
         + (if $tw == 0 then "" else
             (.tags | marklinks | tagtxt | clip($tw)) as $plain
             | " " * $tgap + "\u001b[35m" + ($plain | linkify) + "\u001b[0m" + " " * ($tw - ($plain | length)) end)

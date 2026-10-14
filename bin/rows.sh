@@ -7,7 +7,8 @@
 # --all also shows forks and subagent transcripts.
 # --hidden shows only the sessions hidden with hide.sh (live ones are never hidden).
 # --tag keeps sessions carrying TAG; --by-tag sorts by first tag so groups sit together.
-# --recent keeps only live sessions, most recently focused first (focus log from track.sh);
+# --recent keeps live sessions and those focused or active within recent_hours, most recently
+# focused first (focus log from track.sh), capped at recent_max rows (plugin config);
 # --first-pane pins the pane the picker was opened from to the top.
 #
 # Tags = ticket ids found in the label or the transcript's git branches, plus manual tags from
@@ -99,8 +100,9 @@ autotags=$(jq -R -s -c 'split("\n") | map(select(. != "") | split("\t")
 usertags=$( { [ -f "$BACA_TAGS" ] && cat "$BACA_TAGS"; } | jq -R -s -c 'split("\n")
   | map(select(. != "") | split("\t") | {id: .[0], tag: .[1], kind: .[2]})')
 
+# Last focus per pane (live rows) and per session (rows whose pane is gone).
 focus=$( { [ -f "$BACA_FOCUS" ] && cat "$BACA_FOCUS"; } |
-  awk -F'\t' '{ t[$1] = $2 } END { for (p in t) printf "%s\t%s\n", p, t[p] }' |
+  awk -F'\t' '{ t["p:" $1] = $2; if ($3 != "") t["s:" $3] = $2 } END { for (k in t) printf "%s\t%s\n", k, t[k] }' |
   jq -R -s -c 'split("\n") | map(select(. != "") | split("\t") | {key: .[0], value: (.[1] | tonumber)}) | from_entries')
 
 hidden_ids=$( { [ -f "$BACA_HIDDEN" ] && cat "$BACA_HIDDEN"; } | jq -R . | jq -s -c 'map(select(. != ""))')
@@ -111,6 +113,8 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
     --argjson autotags "$autotags" --argjson usertags "$usertags" --arg re "$BACA_TICKET_RE" \
     --arg tag "$tag" --argjson bytag "$bytag" \
     --argjson focus "$focus" --argjson recent "$recent" --arg first "$first" \
+    --argjson recent_max "$(config_str recent_max | grep -E '^[0-9]+$' || echo 15)" \
+    --argjson recent_age "$(( $(config_str recent_hours | grep -E '^[0-9]+$' || echo 24) * 3600 ))" \
     --arg jira "$(config_str jira_url | sed 's:/*$::')" \
     --arg here "${root:-}" --argjson now "$(date +%s)" '
   def age($t):
@@ -179,6 +183,14 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
         + ($manual[.session_id] // [])
         | unique)})
   | map(select($tag == "" or (.tags | index($tag))))
+  | map(. + {f: ([(if .pane != "" then $focus["p:" + .pane] else null end), $focus["s:" + .session_id], 0] | map(values) | max)})
+  # Recent = alt-tab: sessions by last focus, live or recently closed, capped so it stays a
+  # short jump list. The cap applies before grouping so --by-tag shows the same sessions.
+  | if $recent then
+      map(select(.pane != "" or $now - ([.f, .t] | max) < $recent_age))
+      | sort_by((if $first != "" and .pane == $first then 0 else 1 end), -.f, -.t)
+      | .[:$recent_max]
+    else . end
   | if $bytag then
       group_by(.tags[0] // "")
       | sort_by((if .[0].tags == [] then 1 else 0 end), -(map(.t) | max))
@@ -188,12 +200,9 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
             | [{source: "group", session_id: $g, n: length, t: (map(.t) | max)}]
               + (sort_by(-.t) | map(.tags -= [$g])))
       | add // []
-    else
-      map(. + {f: (if .pane != "" then $focus[.pane] // 0 else 0 end)})
-      | map(select(($recent | not) or .pane != ""))
-      # Focus order belongs to --recent; the main list follows activity, matching the age column.
-      | sort_by((if .pane != "" then 0 else 1 end), (if $first != "" and .pane == $first then 0 else 1 end),
-                (if $recent then -.f else 0 end), -.t)
+    elif $recent then .
+    # Live first, then by activity, matching the age column.
+    else sort_by((if .pane != "" then 0 else 1 end), -.t)
     end
   # Tags get their own column sized to the widest visible value, so it lines up across rows.
   | ([.[] | select(.source != "group") | .tags | marklinks | tagtxt | length] | [(max // 0), 30] | min) as $tw

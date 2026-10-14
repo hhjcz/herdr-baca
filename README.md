@@ -33,8 +33,9 @@ description = "baca recent sessions"
 `hhj.baca.ide` (e.g. on `alt+i`) switches to the JetBrains IDE window for the focused
 pane's project (unlike `alt-i` in the picker, which only raises it and keeps focus).
 
-`hhj.baca.recent` opens the same picker with only live sessions, most recently focused
-first; the current pane stays on top but the cursor starts on the next row, so Enter jumps
+`hhj.baca.recent` opens the same picker as a short jump list, most recently focused first:
+live sessions plus closed ones focused or active within the last `recent_hours` (default 24),
+at most `recent_max` rows (default 15). The current pane stays on top but the cursor starts on the next row, so Enter jumps
 back to where you were (alt-tab style).
 A `pane.focused` hook (`bin/track.sh`) keeps the focus log in `focus.tsv`. The main list
 orders by last activity (live sessions first).
@@ -74,6 +75,8 @@ and from Claude transcripts' `gitBranch` (ticket must own ≥ 20 % of ticket-bra
 
 ```toml
 jira_url = "https://your-site.atlassian.net"   # ticket tags become links (ctrl+click), alt-j opens
+recent_max = 15                                 # rows in the recent list
+recent_hours = 24                               # inactive sessions younger than this show in recent
 ```
 
 ## Layout

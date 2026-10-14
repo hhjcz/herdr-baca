@@ -39,6 +39,19 @@ if [ "${1:-}" = "--pick-tag" ]; then
   exit 0
 fi
 
+# load hook: pops the next refresh stage queued in $T/stages, one per load event.
+if [ "${1:-}" = "--refresh" ]; then
+  t="$2"
+  [ -s "$t/stages" ] || exit 0
+  stage=$(head -n1 "$t/stages")
+  sed -i 1d "$t/stages"
+  case "$stage" in
+  rows) echo "reload-sync($BIN/picker.sh --rows $t)" ;;
+  index) echo "reload-sync($BIN/index.sh --quiet; $BIN/picker.sh --rows $t)" ;;
+  esac
+  exit 0
+fi
+
 prompt_for() {
   if [ -f "$1/recent" ]; then printf 'recent> '
   elif [ -f "$1/tag" ]; then printf '%s> ' "$(cat "$1/tag")"
@@ -78,17 +91,19 @@ launch() {
 header="enter: open · ^t tab here · ^v split · ^w new workspace · ^h this project · ^a forks/subagents
 ^e tags · ^g filter tag · ^o group by tag · ^x hide/unhide · ^u show hidden · ^y copy · alt-v paste · alt-j jira · alt-i IDE · ^r reindex · ^/ preview"
 # Group header rows (source "group") can't be made unselectable in fzf; accepting one filters
-# to its tag and reopens the list, hence the loop. Only the first round reindexes.
-reindex="$BIN/index.sh --quiet; "
+# to its tag and reopens the list, hence the loop. Later rounds start from fresh rows already.
 # alt-a opens the popup, so it closes it too. Sub-pickers (tags, copy, filter) run inside
 # execute() and inherit this via FZF_DEFAULT_OPTS; the quit file tells the main list to follow.
 export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:-} --bind='alt-a:execute-silent(touch $T/quit)+abort'"
 quit="+transform([ -f $T/quit ] && echo abort || :)"
 
-# BACA_MODE=recent (the "recent" action): live sessions by last focus, the pane the popup was
-# opened from on top for orientation, the cursor below it on where you were before. No reindex: only live
-# sessions show, and they come from herdr, not memex.
-[ "${BACA_MODE:-}" = "recent" ] && printf '%s' "$fpane" >"$T/recent"
+# BACA_MODE=recent (the "recent" action): sessions by last focus, the pane the popup was
+# opened from on top for orientation, the cursor below it on where you were before. Its index
+# refresh runs detached: a reload would move the cursor the user may already be steering.
+if [ "${BACA_MODE:-}" = "recent" ]; then
+  printf '%s' "$fpane" >"$T/recent"
+  "$BIN/index.sh" --background
+fi
 
 # The preview toggle persists across popups: hiding it is usually a lasting preference.
 preview_hidden() {
@@ -98,15 +113,19 @@ mkdir -p "$BACA_STATE"
 
 first=true
 while :; do
-if $first && [ ! -f "$T/recent" ] && [ -s "$BACA_STATE/rows.cache" ]; then
-  initial="cat $BACA_STATE/rows.cache"
-else
-  initial="$rows"
-fi
+initial="$rows"
+: >"$T/stages"
 if [ -f "$T/recent" ]; then
   refresh="load:unbind(load)+transform([ {3} = '$fpane' ] && echo down || :)"
 else
-  refresh="load:unbind(load)+reload-sync($reindex$rows)"
+  # The cached list shows instantly; fresh rows (live state, ~0.1 s) follow, then the slower
+  # memex reindex picks up sessions written since the last run.
+  if $first && [ -s "$BACA_STATE/rows.cache" ]; then
+    initial="cat $BACA_STATE/rows.cache"
+    echo rows >>"$T/stages"
+  fi
+  $first && echo index >>"$T/stages"
+  refresh="load:transform($BIN/picker.sh --refresh $T)"
 fi
 sel=$(eval "$initial" | fzf \
   --ansi --delimiter=$'\t' --with-nth=7 --no-sort --layout=reverse --info=inline \
@@ -128,7 +147,6 @@ sel=$(eval "$initial" | fzf \
   --bind="$refresh" \
   --bind="ctrl-r:execute($MEMEX index --only-source claude --only-source opencode --non-interactive --no-update-check)+reload($rows)")
 [ -n "$sel" ] || exit 0
-reindex=""
 first=false
 
 key=$(sed -n 1p <<<"$sel")

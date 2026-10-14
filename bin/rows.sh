@@ -72,24 +72,35 @@ if ! $all; then
 fi
 
 # Branch names carry the ticket more reliably than labels, but only Claude records them per
-# message. The branch can change mid-session, so the cache is keyed on transcript size.
+# message. The branch can change mid-session, so the cache is keyed on transcript size and
+# keeps per-ticket counts: a grown transcript (every live session) only scans its new bytes.
 # Bump when the extraction rule changes so stale caches rebuild.
-BACA_AUTOTAGS="$BACA_AUTOTAGS.v2"
+BACA_AUTOTAGS="$BACA_AUTOTAGS.v3"
 touch "$BACA_AUTOTAGS"
-declare -A seen=()
-while IFS=$'\t' read -r f size tags; do
-  seen["$f"]="$size"
+declare -A seen=() counts=()
+while IFS=$'\t' read -r f size tags cnt; do
+  seen["$f"]="$size" counts["$f"]="$cnt"
 done <"$BACA_AUTOTAGS"
 fresh=""
 while IFS=$'\t' read -r f size; do
   [ -n "$f" ] || continue
-  [ "${seen[$f]:-}" = "$size" ] && continue
+  old="${seen[$f]:-}"
+  [ "$old" = "$size" ] && continue
+  if [ -n "$old" ] && [ "$size" -gt "$old" ]; then from=$((old + 1)) prev="${counts[$f]:-}"; else from=1 prev=""; fi
   # Long sessions wander across branches; a ticket counts only if it owns >= 20% of the
   # messages recorded on ticket branches, so brief detours don't tag the session.
-  tags=$(grep -o '"gitBranch":"[^"]*"' "$f" | grep -oE "$BACA_TICKET_RE" | sort | uniq -c |
-    awk '{ n[$2] = $1; total += $1 } END { for (t in n) if (n[t] * 5 >= total) print t }' |
-    sort | paste -sd, -)
-  fresh+="$f"$'\t'"$size"$'\t'"$tags"$'\n'
+  IFS=$'\t' read -r tags cnt < <(tail -c +"$from" "$f" | grep -o '"gitBranch":"[^"]*"' | grep -oE "$BACA_TICKET_RE" |
+    awk -v prev="$prev" '
+      BEGIN { k = split(prev, p, ","); for (i = 1; i <= k; i++) { split(p[i], kv, "="); n[kv[1]] += kv[2] } }
+      { n[$0]++ }
+      END {
+        for (t in n) total += n[t]
+        for (t in n) { c = c (c == "" ? "" : ",") t "=" n[t]; if (n[t] * 5 >= total) g = g (g == "" ? "" : ",") t }
+        printf "%s\t%s\n", (g == "" ? "-" : g), (c == "" ? "-" : c)
+      }')
+  [ "$tags" = "-" ] && tags=""
+  [ "$cnt" = "-" ] && cnt=""
+  fresh+="$f"$'\t'"$size"$'\t'"$tags"$'\t'"$cnt"$'\n'
 done <<<"$transcripts"
 if [ -n "$fresh" ]; then
   { awk -F'\t' 'NR == FNR { drop[$1]; next } !($1 in drop)' <(printf '%s' "$fresh") "$BACA_AUTOTAGS"
@@ -107,7 +118,22 @@ focus=$( { [ -f "$BACA_FOCUS" ] && cat "$BACA_FOCUS"; } |
 
 hidden_ids=$( { [ -f "$BACA_HIDDEN" ] && cat "$BACA_HIDDEN"; } | jq -R . | jq -s -c 'map(select(. != ""))')
 
-memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
+# memex sessions costs ~80 ms and only changes when an index run writes a new generation.
+sessions() {
+  local gen="${MEMEX_HOME:-$HOME/.memex}/index/CURRENT" cache="$BACA_STATE/sessions.cache" key
+  if [ ${#scope[@]} -gt 0 ] || [ ! -f "$gen" ]; then
+    memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null
+    return
+  fi
+  key=$(cat "$gen")
+  if [ "$(head -n1 "$cache" 2>/dev/null)" != "$key" ]; then
+    { printf '%s\n' "$key"; memex_cmd sessions --limit 100000 2>/dev/null; } >"$cache.$$" &&
+      mv "$cache.$$" "$cache"
+  fi
+  tail -n +2 "$cache"
+}
+
+sessions |
   jq -r -s --argjson live "$live" --argjson src "$BACA_SOURCES" --argjson all "$all" \
     --argjson headless "$headless" --argjson hidden_ids "$hidden_ids" --argjson hidden "$hidden" \
     --argjson autotags "$autotags" --argjson usertags "$usertags" --arg re "$BACA_TICKET_RE" \

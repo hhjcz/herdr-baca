@@ -14,7 +14,7 @@ if [ "${1:-}" = "--rows" ]; then
   [ -f "$t/hidden" ] && args+=(--hidden)
   [ -f "$t/tag" ] && args+=(--tag "$(cat "$t/tag")")
   [ -f "$t/bytag" ] && args+=(--by-tag)
-  [ -f "$t/recent" ] && args+=(--recent --exclude-pane "$(cat "$t/recent")")
+  [ -f "$t/recent" ] && args+=(--recent --first-pane "$(cat "$t/recent")")
   if [ ${#args[@]} -eq 0 ]; then
     mkdir -p "$BACA_STATE"
     # The unfiltered list is what the next popup shows instantly, before memex reindexes.
@@ -85,8 +85,8 @@ reindex="$BIN/index.sh --quiet; "
 export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:-} --bind='alt-a:execute-silent(touch $T/quit)+abort'"
 quit="+transform([ -f $T/quit ] && echo abort || :)"
 
-# BACA_MODE=recent (the "recent" action): live sessions by last focus, minus the pane the
-# popup was opened from, so the first row is where you were before. No reindex: only live
+# BACA_MODE=recent (the "recent" action): live sessions by last focus, the pane the popup was
+# opened from on top for orientation, the cursor below it on where you were before. No reindex: only live
 # sessions show, and they come from herdr, not memex.
 [ "${BACA_MODE:-}" = "recent" ] && printf '%s' "$fpane" >"$T/recent"
 
@@ -104,7 +104,7 @@ else
   initial="$rows"
 fi
 if [ -f "$T/recent" ]; then
-  refresh="load:unbind(load)"
+  refresh="load:unbind(load)+transform([ {3} = '$fpane' ] && echo down || :)"
 else
   refresh="load:unbind(load)+reload-sync($reindex$rows)"
 fi

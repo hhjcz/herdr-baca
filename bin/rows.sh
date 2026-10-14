@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Emits picker rows as TSV: source, session_id, live_pane, cwd, source_path, label, display, tags.
 #
-#   rows.sh [--here DIR] [--all] [--hidden] [--tag TAG] [--by-tag] [--recent] [--exclude-pane P]
+#   rows.sh [--here DIR] [--all] [--hidden] [--tag TAG] [--by-tag] [--recent] [--first-pane P]
 #
 # --here keeps sessions whose cwd is DIR, lives under it, or shares its git root.
 # --all also shows forks and subagent transcripts.
 # --hidden shows only the sessions hidden with hide.sh (live ones are never hidden).
 # --tag keeps sessions carrying TAG; --by-tag sorts by first tag so groups sit together.
 # --recent keeps only live sessions, most recently focused first (focus log from track.sh);
-# --exclude-pane drops the pane the picker was opened from.
+# --first-pane pins the pane the picker was opened from to the top.
 #
 # Tags = ticket ids found in the label or the transcript's git branches, plus manual tags from
 # tag.sh, minus tags the user rejected there.
@@ -21,7 +21,7 @@ hidden=false
 tag=""
 bytag=false
 recent=false
-exclude=""
+first=""
 while [ $# -gt 0 ]; do
   case "$1" in
   --here) here="$2"; shift 2 ;;
@@ -30,7 +30,7 @@ while [ $# -gt 0 ]; do
   --tag) tag="$2"; shift 2 ;;
   --by-tag) bytag=true; shift ;;
   --recent) recent=true; shift ;;
-  --exclude-pane) exclude="$2"; shift 2 ;;
+  --first-pane) first="$2"; shift 2 ;;
   *) die "rows: unknown argument '$1'" ;;
   esac
 done
@@ -110,7 +110,7 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
     --argjson headless "$headless" --argjson hidden_ids "$hidden_ids" --argjson hidden "$hidden" \
     --argjson autotags "$autotags" --argjson usertags "$usertags" --arg re "$BACA_TICKET_RE" \
     --arg tag "$tag" --argjson bytag "$bytag" \
-    --argjson focus "$focus" --argjson recent "$recent" --arg exclude "$exclude" \
+    --argjson focus "$focus" --argjson recent "$recent" --arg first "$first" \
     --arg jira "$(config_str jira_url | sed 's:/*$::')" \
     --arg here "${root:-}" --argjson now "$(date +%s)" '
   def age($t):
@@ -190,10 +190,10 @@ memex_cmd sessions --limit 100000 ${scope[@]+"${scope[@]}"} 2>/dev/null |
       | add // []
     else
       map(. + {f: (if .pane != "" then $focus[.pane] // 0 else 0 end)})
-      | map(select((.pane != "" or ($recent | not)) and .pane != $exclude or .pane == ""))
       | map(select(($recent | not) or .pane != ""))
       # Focus order belongs to --recent; the main list follows activity, matching the age column.
-      | sort_by((if .pane != "" then 0 else 1 end), (if $recent then -.f else 0 end), -.t)
+      | sort_by((if .pane != "" then 0 else 1 end), (if $first != "" and .pane == $first then 0 else 1 end),
+                (if $recent then -.f else 0 end), -.t)
     end
   # Tags get their own column sized to the widest visible value, so it lines up across rows.
   | ([.[] | select(.source != "group") | .tags | marklinks | tagtxt | length] | [(max // 0), 30] | min) as $tw

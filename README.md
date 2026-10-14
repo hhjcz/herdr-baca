@@ -34,7 +34,8 @@ description = "baca recent sessions"
 pane's project (unlike `alt-i` in the picker, which only raises it and keeps focus).
 
 `hhj.baca.recent` opens the same picker with only live sessions, most recently focused
-first and the current pane left out, so Enter jumps back to where you were (alt-tab style).
+first; the current pane stays on top but the cursor starts on the next row, so Enter jumps
+back to where you were (alt-tab style).
 A `pane.focused` hook (`bin/track.sh`) keeps the focus log in `focus.tsv`. The main list
 orders by last activity (live sessions first).
 

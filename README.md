@@ -44,7 +44,7 @@ orders by last activity (live sessions first).
 
 | key | |
 |---|---|
-| enter | live: focus · past: choose where to resume (current pane if no agent runs there, split, tab here, tab in project workspace, new workspace) |
+| enter | live: focus · past: choose where to resume (current pane if no agent runs there, split, tab here, tab in project workspace, new workspace); next to another worktree of the same repo it resumes in that worktree |
 | ctrl-t / ctrl-v / ctrl-w | resume in new tab here / split / new workspace |
 | ctrl-h | only current project (git root of focused pane) |
 | ctrl-a | also forks, subagents, headless `claude -p` runs |

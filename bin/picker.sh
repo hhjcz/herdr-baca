@@ -169,10 +169,28 @@ if [ ! -d "$rcwd" ]; then
   exit 1
 fi
 
+# Where a resume lands: the target's worktree when it is another checkout of the session's repo.
+dir_for() {
+  case "$1" in
+  tab) if [ "$2" = "$ws" ]; then in_worktree "$rcwd" "$fcwd"; else in_worktree "$rcwd" "$(workspace_cwd "$2")"; fi ;;
+  split | pane) in_worktree "$rcwd" "$fcwd" ;;
+  *) printf '%s\n' "$rcwd" ;;
+  esac
+}
+resume() {
+  launch resume "$source" "$id" "$(dir_for "$1" "${2:-}")" "$label" "$1" "${2:-}"
+}
+# Menu suffix naming the other worktree, so the switch is visible before choosing.
+via() {
+  local d
+  d=$(dir_for "$1" "${2:-}")
+  [ "$d" = "$rcwd" ] || printf '  (in %s)' "${d/#$HOME/\~}"
+}
+
 case "$key" in
-ctrl-t) launch resume "$source" "$id" "$rcwd" "$label" tab "$ws"; exit 0 ;;
-ctrl-v) launch resume "$source" "$id" "$rcwd" "$label" split "$fpane"; exit 0 ;;
-ctrl-w) launch resume "$source" "$id" "$rcwd" "$label" workspace; exit 0 ;;
+ctrl-t) resume tab "$ws"; exit 0 ;;
+ctrl-v) resume split "$fpane"; exit 0 ;;
+ctrl-w) resume workspace; exit 0 ;;
 esac
 
 # Enter: let the user choose where the resumed session goes.
@@ -180,10 +198,10 @@ options=""
 # Nearest first: this pane, beside it, this workspace, the project's workspace, a new one.
 # Only an agent-free pane: resuming there would type into the running agent.
 if [ -n "$fpane" ] && [ -z "$("$H" pane get "$fpane" 2>/dev/null | jq -r '.result.pane.agent // empty')" ]; then
-  options+="pane"$'\t'"$fpane"$'\t'"current pane"$'\n'
+  options+="pane"$'\t'"$fpane"$'\t'"current pane$(via pane "$fpane")"$'\n'
 fi
-[ -n "$fpane" ] && options+="split"$'\t'"$fpane"$'\t'"split next to current pane"$'\n'
-[ -n "$ws" ] && options+="tab"$'\t'"$ws"$'\t'"new tab in current workspace $(workspace_label "$ws")"$'\n'
+[ -n "$fpane" ] && options+="split"$'\t'"$fpane"$'\t'"split next to current pane$(via split "$fpane")"$'\n'
+[ -n "$ws" ] && options+="tab"$'\t'"$ws"$'\t'"new tab in current workspace $(workspace_label "$ws")$(via tab "$ws")"$'\n'
 match=$(workspace_for "$rcwd")
 if [ -n "$match" ] && [ "$match" != "$ws" ]; then
   options+="tab"$'\t'"$match"$'\t'"new tab in workspace $(workspace_label "$match") (matches $rcwd)"$'\n'
@@ -193,6 +211,4 @@ options+="workspace"$'\t'""$'\t'"new workspace"
 choice=$(printf '%s\n' "$options" | fzf \
   --delimiter=$'\t' --with-nth=3 --no-sort --layout=reverse --info=hidden \
   --prompt='resume in> ' --header="$label  ·  $rcwd") || exit 0
-mode=$(cut -f1 <<<"$choice")
-target=$(cut -f2 <<<"$choice")
-launch resume "$source" "$id" "$rcwd" "$label" "$mode" "$target"
+resume "$(cut -f1 <<<"$choice")" "$(cut -f2 <<<"$choice")"

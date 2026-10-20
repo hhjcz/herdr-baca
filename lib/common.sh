@@ -69,6 +69,26 @@ resume_cwd() {
 }
 
 # Workspace already holding a pane in DIR (or, failing that, in DIR's git root); empty if none.
+# Resuming next to work already open in another worktree of the same repo: run there, keeping
+# the subdirectory, so the session sees that checkout. Claude finds the transcript across
+# worktrees of one repo; unrelated directories keep the session's own.
+in_worktree() {
+  local dir="$1" there="$2" common top ttop
+  [ -n "$there" ] && [ -d "$there" ] || { printf '%s\n' "$dir"; return; }
+  common=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+    [ "$common" = "$(git -C "$there" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" ] &&
+    top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) &&
+    ttop=$(git -C "$there" rev-parse --show-toplevel 2>/dev/null) &&
+    [ "$top" != "$ttop" ] || { printf '%s\n' "$dir"; return; }
+  if [ -d "$ttop${dir#"$top"}" ]; then printf '%s\n' "$ttop${dir#"$top"}"; else printf '%s\n' "$ttop"; fi
+}
+
+# A workspace's working directory: its focused pane's, else its first pane's.
+workspace_cwd() {
+  "$H" pane list 2>/dev/null | jq -r --arg w "$1" '
+    [.result.panes[]? | select(.workspace_id == $w)] | (map(select(.focused)) + .)[0].cwd // empty'
+}
+
 workspace_for() {
   local dir="$1" root
   root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || root="$dir"

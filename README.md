@@ -44,7 +44,7 @@ orders by last activity (live sessions first).
 
 | key | |
 |---|---|
-| enter | live: focus · past: choose where to resume (current pane if no agent runs there, split, tab here, tab in project workspace, new workspace); next to another worktree of the same repo it resumes in that worktree |
+| enter | live: focus · past: choose where to resume (tab in the session's workspace, current pane if no agent runs there, split, tab here, new workspace); each target next to another worktree of the same repo also gets an "in <worktree>" row, listed last with a warning (Claude keeps prompt history per directory, so up-arrow there shows that worktree's prompts) |
 | ctrl-t / ctrl-v / ctrl-w | resume in new tab here / split / new workspace |
 | ctrl-h | only current project (git root of focused pane) |
 | ctrl-a | also forks, subagents, headless `claude -p` runs |

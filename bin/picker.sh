@@ -169,8 +169,10 @@ if [ ! -d "$rcwd" ]; then
   exit 1
 fi
 
-# Where a resume lands: the target's worktree when it is another checkout of the session's repo.
-dir_for() {
+# The target's worktree when it is another checkout of the session's repo. Only offered as an
+# explicit choice: Claude keys prompt history by directory, so up-arrow there recalls another
+# worktree's prompts, and the conversation's file references point at the original checkout.
+worktree_for() {
   case "$1" in
   tab) if [ "$2" = "$ws" ]; then in_worktree "$rcwd" "$fcwd"; else in_worktree "$rcwd" "$(workspace_cwd "$2")"; fi ;;
   split | pane) in_worktree "$rcwd" "$fcwd" ;;
@@ -178,13 +180,16 @@ dir_for() {
   esac
 }
 resume() {
-  launch resume "$source" "$id" "$(dir_for "$1" "${2:-}")" "$label" "$1" "${2:-}"
+  launch resume "$source" "$id" "${3:-$rcwd}" "$label" "$1" "${2:-}"
 }
-# Menu suffix naming the other worktree, so the switch is visible before choosing.
-via() {
-  local d
-  d=$(dir_for "$1" "${2:-}")
-  [ "$d" = "$rcwd" ] || printf '  (in %s)' "${d/#$HOME/\~}"
+# One menu row per target in the session's own worktree; rows for the target's worktree, when
+# that differs, go after all of them with a warning.
+option() {
+  local wt
+  options+="$1"$'\t'"$2"$'\t'"$rcwd"$'\t'"$3"$'\n'
+  wt=$(worktree_for "$1" "$2")
+  [ "$wt" = "$rcwd" ] ||
+    others+="$1"$'\t'"$2"$'\t'"$wt"$'\t'"$3 in ${wt/#$HOME/\~}  "$'\e[33m'"⚠ up-arrow history from that worktree"$'\e[0m\n'
 }
 
 case "$key" in
@@ -194,21 +199,21 @@ ctrl-w) resume workspace; exit 0 ;;
 esac
 
 # Enter: let the user choose where the resumed session goes.
-options=""
-# Nearest first: this pane, beside it, this workspace, the project's workspace, a new one.
-# Only an agent-free pane: resuming there would type into the running agent.
-if [ -n "$fpane" ] && [ -z "$("$H" pane get "$fpane" 2>/dev/null | jq -r '.result.pane.agent // empty')" ]; then
-  options+="pane"$'\t'"$fpane"$'\t'"current pane$(via pane "$fpane")"$'\n'
-fi
-[ -n "$fpane" ] && options+="split"$'\t'"$fpane"$'\t'"split next to current pane$(via split "$fpane")"$'\n'
-[ -n "$ws" ] && options+="tab"$'\t'"$ws"$'\t'"new tab in current workspace $(workspace_label "$ws")$(via tab "$ws")"$'\n'
+options="" others=""
+# The session's own workspace first, then nearest first: this pane, beside it, this workspace.
 match=$(workspace_for "$rcwd")
 if [ -n "$match" ] && [ "$match" != "$ws" ]; then
-  options+="tab"$'\t'"$match"$'\t'"new tab in workspace $(workspace_label "$match") (matches $rcwd)"$'\n'
+  options+="tab"$'\t'"$match"$'\t'"$rcwd"$'\t'"new tab in workspace $(workspace_label "$match") (matches $rcwd)"$'\n'
 fi
-options+="workspace"$'\t'""$'\t'"new workspace"
+# Only an agent-free pane: resuming there would type into the running agent.
+if [ -n "$fpane" ] && [ -z "$("$H" pane get "$fpane" 2>/dev/null | jq -r '.result.pane.agent // empty')" ]; then
+  option pane "$fpane" "current pane"
+fi
+[ -n "$fpane" ] && option split "$fpane" "split next to current pane"
+[ -n "$ws" ] && option tab "$ws" "new tab in current workspace $(workspace_label "$ws")"
+options+="workspace"$'\t'""$'\t'"$rcwd"$'\t'"new workspace"$'\n'
 
-choice=$(printf '%s\n' "$options" | fzf \
-  --delimiter=$'\t' --with-nth=3 --no-sort --layout=reverse --info=hidden \
+choice=$(printf '%s' "$options$others" | fzf --ansi \
+  --delimiter=$'\t' --with-nth=4 --no-sort --layout=reverse --info=hidden \
   --prompt='resume in> ' --header="$label  ·  $rcwd") || exit 0
-resume "$(cut -f1 <<<"$choice")" "$(cut -f2 <<<"$choice")"
+resume "$(cut -f1 <<<"$choice")" "$(cut -f2 <<<"$choice")" "$(cut -f3 <<<"$choice")"

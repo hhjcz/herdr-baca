@@ -57,13 +57,14 @@ ctx() {
   printf '%s' "${HERDR_PLUGIN_CONTEXT_JSON:-{\}}" | jq -r ".$1 // empty" 2>/dev/null
 }
 
-# Claude resolves --resume against the launch directory's project, while memex reports the
-# session's latest cwd (sessions often cd elsewhere), so read the first cwd from the transcript.
+# The first cwd in a Claude transcript is where the session started, so prompt history (keyed
+# by directory) lines up there; memex reports the latest cwd instead. A renamed or deleted
+# start directory falls back to the latest one: Claude finds the session by id from anywhere.
 resume_cwd() {
   local source="$1" cwd="$2" path="$3" first
   if [ "$source" = "claude" ] && [ -f "$path" ]; then
     first=$(head -c 500000 "$path" | grep -m1 -o '"cwd":"[^"]*"' | sed 's/^"cwd":"//; s/"$//')
-    [ -n "$first" ] && cwd="$first"
+    [ -n "$first" ] && [ -d "$first" ] && cwd="$first"
   fi
   printf '%s\n' "$cwd"
 }

@@ -74,33 +74,40 @@ fi
 # Branch names carry the ticket more reliably than labels, but only Claude records them per
 # message. The branch can change mid-session, so the cache is keyed on transcript size and
 # keeps per-ticket counts: a grown transcript (every live session) only scans its new bytes.
+# The same pass keeps the session's latest effort level, which /effort can change mid-session.
 # Bump when the extraction rule changes so stale caches rebuild.
-BACA_AUTOTAGS="$BACA_AUTOTAGS.v3"
+BACA_AUTOTAGS="$BACA_AUTOTAGS.v4"
 touch "$BACA_AUTOTAGS"
-declare -A seen=() counts=()
-while IFS=$'\t' read -r f size tags cnt; do
-  seen["$f"]="$size" counts["$f"]="$cnt"
+declare -A seen=() counts=() efforts=()
+while IFS=$'\t' read -r f size tags cnt effort; do
+  seen["$f"]="$size" counts["$f"]="$cnt" efforts["$f"]="$effort"
 done <"$BACA_AUTOTAGS"
 fresh=""
 while IFS=$'\t' read -r f size; do
   [ -n "$f" ] || continue
   old="${seen[$f]:-}"
   [ "$old" = "$size" ] && continue
-  if [ -n "$old" ] && [ "$size" -gt "$old" ]; then from=$((old + 1)) prev="${counts[$f]:-}"; else from=1 prev=""; fi
+  if [ -n "$old" ] && [ "$size" -gt "$old" ]; then
+    from=$((old + 1)) prev="${counts[$f]:-}" peffort="${efforts[$f]:-}"
+  else from=1 prev="" peffort=""; fi
   # Long sessions wander across branches; a ticket counts only if it owns >= 20% of the
   # messages recorded on ticket branches, so brief detours don't tag the session.
-  IFS=$'\t' read -r tags cnt < <(tail -c +"$from" "$f" | grep -o '"gitBranch":"[^"]*"' | grep -oE "$BACA_TICKET_RE" |
-    awk -v prev="$prev" '
+  # perTurnEffort pins the match to the turn record: tool inputs carry "effort" keys too.
+  IFS=$'\t' read -r tags cnt effort < <(tail -c +"$from" "$f" |
+    grep -oE '"gitBranch":"[^"]*"|"effort":"[a-z]+","perTurnEffort"' |
+    awk -v prev="$prev" -v e="$peffort" -v re="$BACA_TICKET_RE" '
       BEGIN { k = split(prev, p, ","); for (i = 1; i <= k; i++) { split(p[i], kv, "="); n[kv[1]] += kv[2] } }
-      { n[$0]++ }
+      /^"effort"/ { split($0, q, "\""); e = q[4]; next }
+      { s = $0; while (match(s, re)) { n[substr(s, RSTART, RLENGTH)]++; s = substr(s, RSTART + RLENGTH) } }
       END {
         for (t in n) total += n[t]
         for (t in n) { c = c (c == "" ? "" : ",") t "=" n[t]; if (n[t] * 5 >= total) g = g (g == "" ? "" : ",") t }
-        printf "%s\t%s\n", (g == "" ? "-" : g), (c == "" ? "-" : c)
+        printf "%s\t%s\t%s\n", (g == "" ? "-" : g), (c == "" ? "-" : c), (e == "" ? "-" : e)
       }')
   [ "$tags" = "-" ] && tags=""
   [ "$cnt" = "-" ] && cnt=""
-  fresh+="$f"$'\t'"$size"$'\t'"$tags"$'\t'"$cnt"$'\n'
+  [ "$effort" = "-" ] && effort=""
+  fresh+="$f"$'\t'"$size"$'\t'"$tags"$'\t'"$cnt"$'\t'"$effort"$'\n'
 done <<<"$transcripts"
 if [ -n "$fresh" ]; then
   { awk -F'\t' 'NR == FNR { drop[$1]; next } !($1 in drop)' <(printf '%s' "$fresh") "$BACA_AUTOTAGS"
@@ -108,6 +115,8 @@ if [ -n "$fresh" ]; then
 fi
 autotags=$(jq -R -s -c 'split("\n") | map(select(. != "") | split("\t")
   | select(.[2] != "") | {key: .[0], value: (.[2] | split(","))}) | from_entries' "$BACA_AUTOTAGS")
+efforts=$(jq -R -s -c 'split("\n") | map(select(. != "") | split("\t")
+  | select((.[4] // "") != "") | {key: .[0], value: .[4]}) | from_entries' "$BACA_AUTOTAGS")
 usertags=$( { [ -f "$BACA_TAGS" ] && cat "$BACA_TAGS"; } | jq -R -s -c 'split("\n")
   | map(select(. != "") | split("\t") | {id: .[0], tag: .[1], kind: .[2]})')
 
@@ -136,7 +145,7 @@ sessions() {
 sessions |
   jq -r -s --argjson live "$live" --argjson src "$BACA_SOURCES" --argjson all "$all" \
     --argjson headless "$headless" --argjson hidden_ids "$hidden_ids" --argjson hidden "$hidden" \
-    --argjson autotags "$autotags" --argjson usertags "$usertags" --arg re "$BACA_TICKET_RE" \
+    --argjson autotags "$autotags" --argjson efforts "$efforts" --argjson usertags "$usertags" --arg re "$BACA_TICKET_RE" \
     --arg tag "$tag" --argjson bytag "$bytag" \
     --argjson focus "$focus" --argjson recent "$recent" --arg first "$first" \
     --argjson recent_max "$(config_str recent_max | grep -E '^[0-9]+$' || echo 15)" \
@@ -244,7 +253,9 @@ sessions |
       ( (if .pane != "" then icon(.status) else " " end)
         + " " + agecolor(.t; age(.t) | (" " * (4 - length)) + .)
         + "  " + short(.source)
-        + "  " + ((70 - $tw - $tgap) as $lw
+        + "  \u001b[2m" + ({low: "low", medium: "med", high: "high", xhigh: "xhi", max: "max"}[$efforts[.source_path // ""] // ""] // ""
+                           | . + " " * (4 - length)) + "\u001b[0m"
+        + "  " + ((64 - $tw - $tgap) as $lw
             | if $first != "" and .pane == $first then
                 (.label | gsub("[\t\n]"; " ") | clip($lw - 11)) as $l
                 | "\u001b[1m" + $l + "\u001b[0m  \u001b[1;36m◂ current\u001b[0m" + " " * ($lw - ($l | length) - 11)

@@ -61,6 +61,7 @@ orders by last activity (live sessions first).
 | ctrl-/ | show / hide preview (remembered) |
 
 Status column: `●` working · `○` idle · `✓` done · `!` blocked · blank = not running.
+Effort column (Claude only): latest `/effort` level recorded in the transcript — `low` · `med` · `high` · `xhi` · `max`.
 
 ## Tags (experimental)
 

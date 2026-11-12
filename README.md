@@ -61,7 +61,7 @@ orders by last activity (live sessions first).
 | ctrl-/ | show / hide preview (remembered) |
 
 Status column: `●` working · `○` idle · `✓` done · `!` blocked · blank = not running.
-Effort column (Claude only): latest `/effort` level recorded in the transcript — `low` · `med` · `high` · `xhi` · `max`.
+Effort column: Claude's latest `/effort` level from the transcript, OpenCode's model variant (needs `sqlite3`, which also supplies OpenCode 2 session titles) — `low` · `med` · `high` · `xhi` · `max`.
 
 ## Tags (experimental)
 

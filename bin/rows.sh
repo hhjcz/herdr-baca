@@ -117,6 +117,16 @@ autotags=$(jq -R -s -c 'split("\n") | map(select(. != "") | split("\t")
   | select(.[2] != "") | {key: .[0], value: (.[2] | split(","))}) | from_entries' "$BACA_AUTOTAGS")
 efforts=$(jq -R -s -c 'split("\n") | map(select(. != "") | split("\t")
   | select((.[4] // "") != "") | {key: .[0], value: .[4]}) | from_entries' "$BACA_AUTOTAGS")
+# memex labels OpenCode 2 sessions with their first prompt; the title OpenCode generates sits
+# in session_v2, next to the model variant, which is OpenCode's effort level.
+ocmeta=""
+ocdb="${XDG_DATA_HOME:-$HOME/.local/share}/opencode/opencode.db"
+if [ -f "$ocdb" ] && command -v sqlite3 >/dev/null; then
+  ocmeta=$(sqlite3 -readonly -json "$ocdb" "select id, case when title like 'New session%' then null
+    else nullif(title, '') end as title, json_extract(model, '\$.variant') as effort from session_v2" 2>/dev/null |
+    jq -c 'map({key: .id, value: .}) | from_entries' 2>/dev/null)
+fi
+[ -n "$ocmeta" ] || ocmeta='{}'
 usertags=$( { [ -f "$BACA_TAGS" ] && cat "$BACA_TAGS"; } | jq -R -s -c 'split("\n")
   | map(select(. != "") | split("\t") | {id: .[0], tag: .[1], kind: .[2]})')
 
@@ -136,6 +146,8 @@ sessions() {
   fi
   key=$(cat "$gen")
   if [ "$(head -n1 "$cache" 2>/dev/null)" != "$key" ]; then
+    # fzf kills a running reload when the next one starts, mid-write.
+    trap "rm -f '$cache.$$'" EXIT
     { printf '%s\n' "$key"; memex_cmd sessions --limit 100000 2>/dev/null; } >"$cache.$$" &&
       mv "$cache.$$" "$cache"
   fi
@@ -145,7 +157,7 @@ sessions() {
 sessions |
   jq -r -s --argjson live "$live" --argjson src "$BACA_SOURCES" --argjson all "$all" \
     --argjson headless "$headless" --argjson hidden_ids "$hidden_ids" --argjson hidden "$hidden" \
-    --argjson autotags "$autotags" --argjson efforts "$efforts" --argjson usertags "$usertags" --arg re "$BACA_TICKET_RE" \
+    --argjson autotags "$autotags" --argjson efforts "$efforts" --argjson oc "$ocmeta" --argjson usertags "$usertags" --arg re "$BACA_TICKET_RE" \
     --arg tag "$tag" --argjson bytag "$bytag" \
     --argjson focus "$focus" --argjson recent "$recent" --arg first "$first" \
     --argjson recent_max "$(config_str recent_max | grep -E '^[0-9]+$' || echo 15)" \
@@ -199,9 +211,11 @@ sessions |
         | select($known[.agent_session.value] | not)
         | select($here == "" or (.cwd // "") == $here or ((.cwd // "") | startswith($here + "/")))
         | {source: .agent, session_id: .agent_session.value, cwd: .cwd, source_path: "",
-           label: (.terminal_title_stripped // ""), t: $now}
+           label: (.terminal_title_stripped // ""), effort: "", t: $now}
       ]
-      + [ $hist[] | {source, session_id, cwd, source_path, label: (.label // ""), t: (.last_at | ts)} ]
+      + [ $hist[] | {source, session_id, cwd, source_path, label: ($oc[.session_id].title // .label // ""),
+                     effort: (if .source == "opencode" then $oc[.session_id].effort else $efforts[.source_path] end // ""),
+                     t: (.last_at | ts)} ]
     )
   # Claude copies a transcript into a second project dir when a session is resumed elsewhere.
   | group_by(.session_id) | map(max_by(.t))
@@ -253,7 +267,7 @@ sessions |
       ( (if .pane != "" then icon(.status) else " " end)
         + " " + agecolor(.t; age(.t) | (" " * (4 - length)) + .)
         + "  " + short(.source)
-        + "  \u001b[2m" + ({low: "low", medium: "med", high: "high", xhigh: "xhi", max: "max"}[$efforts[.source_path // ""] // ""] // ""
+        + "  \u001b[2m" + ({low: "low", medium: "med", high: "high", xhigh: "xhi", max: "max", default: ""}[.effort] // .effort | .[:4]
                            | . + " " * (4 - length)) + "\u001b[0m"
         + "  " + ((64 - $tw - $tgap) as $lw
             | if $first != "" and .pane == $first then

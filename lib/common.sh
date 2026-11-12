@@ -9,6 +9,8 @@ BACA_HIDDEN="$BACA_STATE/hidden"
 BACA_TAGS="$BACA_STATE/tags.tsv"
 BACA_FOCUS="$BACA_STATE/focus.tsv"
 BACA_AUTOTAGS="$BACA_STATE/auto-tags.tsv"
+# pid of the picker holding the popup, so a new open can close one stranded out of sight.
+BACA_PICKER="$BACA_STATE/picker.open"
 # Jira-style keys; shared by grep -E and jq (Oniguruma), so keep it to the common subset.
 BACA_TICKET_RE="${BACA_TICKET_RE:-[A-Z][A-Z0-9]+-[0-9]+}"
 

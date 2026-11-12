@@ -71,7 +71,10 @@ fpane=$(ctx focused_pane_id)
 fcwd=$(ctx focused_pane_cwd)
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/baca.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+mkdir -p "$BACA_STATE"
+# Only the popup counts: a picker run by hand in a pane holds no popup.
+[ -n "${HERDR_PLUGIN_ENTRYPOINT_ID:-}" ] && echo $$ >"$BACA_PICKER"
+trap 'rm -rf "$T"; [ "$(cat "$BACA_PICKER" 2>/dev/null)" = $$ ] && rm -f "$BACA_PICKER"' EXIT
 rows="$BIN/picker.sh --rows $T"
 
 pause() {
@@ -109,7 +112,6 @@ fi
 preview_hidden() {
   [ -f "$BACA_STATE/preview-hidden" ] && printf ',hidden'
 }
-mkdir -p "$BACA_STATE"
 
 first=true
 while :; do

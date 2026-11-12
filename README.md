@@ -6,7 +6,7 @@ herdr plugin: popup picker over Claude Code + OpenCode sessions.
 - live session → focus its pane
 - past session → resume (`claude --resume` / `opencode --session`) in a new tab, split or workspace
 
-Needs: herdr ≥ 0.8, memex ≥ 0.28 (installed as herdr plugin `nicosuave/memex`, or on `PATH`, or `BACA_MEMEX=/path`), fzf, jq.
+Needs: herdr ≥ 0.8, memex ≥ 0.28 (installed as herdr plugin `nicosuave/memex`, or on `PATH`, or `BACA_MEMEX=/path`), fzf, jq, socat or `nc -U`.
 
 ## Install
 
@@ -81,6 +81,7 @@ recent_hours = 24                               # inactive sessions younger than
 
 ## Layout
 
+- `bin/open.sh` opens the popup; closes a picker left open out of sight (herdr allows one popup)
 - `bin/picker.sh` popup + fzf
 - `bin/rows.sh` memex + herdr → TSV rows
 - `bin/preview.sh` live pane tail / last memex messages

@@ -20,14 +20,14 @@ command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/picker.sh\""]
 id = "open"
 title = "baca: sessions"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin hhj.baca --entrypoint picker --focus"]
+command = ["bash", "bin/open.sh"]
 
 # Live sessions by last focus, previous one preselected: an alt-tab over agent sessions.
 [[actions]]
 id = "recent"
 title = "baca: recent sessions"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin hhj.baca --entrypoint picker --env BACA_MODE=recent --focus"]
+command = ["bash", "bin/open.sh", "--env", "BACA_MODE=recent"]
 
 # Switch to the JetBrains IDE window for the focused pane's project.
 [[actions]]

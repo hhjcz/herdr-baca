@@ -45,3 +45,24 @@ command = ["bash", "bin/index.sh"]
 [[events]]
 on = "pane.focused"
 command = ["bash", "bin/track.sh"]
+
+# Sidebar $title token per workspace: first agent's session name, else the git branch.
+# Claude names a session after its first prompt, which also flips its status.
+[[startup]]
+command = ["bash", "bin/spaces.sh"]
+
+[[events]]
+on = "pane.agent_detected"
+command = ["bash", "bin/spaces.sh"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["bash", "bin/spaces.sh"]
+
+[[events]]
+on = "pane.closed"
+command = ["bash", "bin/spaces.sh"]
+
+[[events]]
+on = "tab.moved"
+command = ["bash", "bin/spaces.sh"]

@@ -70,6 +70,16 @@ and from Claude transcripts' `gitBranch` (ticket must own ≥ 20 % of ticket-bra
 \+ manual tags − rejected. Stored in `$HERDR_PLUGIN_STATE_DIR/tags.tsv`
 (`session_id, tag, manual|rejected`); branch scan cached in `auto-tags.tsv.v2`.
 
+## Sidebar title
+
+baca reports a `$title` token per workspace: the session name of its first agent (leftmost
+tab), else the git branch. Show it in herdr's Space rows instead of `branch`:
+
+```toml
+[ui.sidebar.spaces]
+rows = [["state_icon", "workspace"], ["$title", "git_status"]]
+```
+
 ## Config
 
 `~/.config/herdr/plugins/config/hhj.baca/config.toml`:
@@ -91,5 +101,6 @@ recent_hours = 24                               # inactive sessions younger than
 - `bin/jira.sh` open ticket in browser
 - `bin/ide.sh` raise the session's JetBrains IDE window (Hyprland)
 - `bin/track.sh` pane.focused hook → focus log
+- `bin/spaces.sh` agent/pane hooks → workspace `$title` token
 - `bin/hide.sh` toggle id in `$HERDR_PLUGIN_STATE_DIR/hidden`
 - `bin/index.sh` memex index (on picker open, async, + action)
